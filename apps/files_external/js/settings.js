@@ -14,9 +14,11 @@ function updateStatus(statusEl, result){
 function highlightInput(input) {
 	if ($(input).attr('type') == 'text' || $(input).attr('type') == 'password') {
 		if ($(input).val() == '' && !$(input).hasClass('optional')) {
-			$(input).css('background-color', '#ffcccc');
+			$(input).addClass('error');
+			return true;
 		} else {
-			$(input).css('background-color', '');
+			$(input).removeClass('error');
+			return false;
 		}
 	}
 }

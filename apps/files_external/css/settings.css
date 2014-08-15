@@ -42,3 +42,7 @@ tr:hover>td.remove>img { visibility:visible; cursor:pointer; }
 #userMountingBackends {
 	padding-left: 25px;
 }
+
+#externalStorage input.error {
+	background-color: #ffcccc;
+}
