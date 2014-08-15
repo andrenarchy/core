@@ -12,6 +12,37 @@ namespace OC\Repair;
 use OC\Hooks\BasicEmitter;
 
 class RepairLegacyStorages extends BasicEmitter {
+	/**
+	 * @var \OCP\IConfig
+	 */
+	protected $config;
+
+	/**
+	 * @var \OC\DB\Connection
+	 */
+	protected $connection;
+
+	protected $findStorageInCacheStatement;
+	protected $renameStorageStatement;
+
+	/**
+	 * @param \OCP\IConfig $config
+	 * @param \OC\DB\Connection $connection
+	 */
+	public function __construct($config, $connection) {
+		$this->connection = $connection;
+		$this->config = $config;
+
+		$this->findStorageInCacheStatement = $this->connection->prepare(
+			'SELECT DISTINCT `storage` FROM `*PREFIX*filecache`'
+			. ' WHERE `storage` in (?, ?)'
+		);
+		$this->renameStorageStatement = $this->connection->prepare(
+			'UPDATE `*PREFIX*storages`'
+			. ' SET `id` = ?'
+			. ' WHERE `id` = ?'
+		);
+	}
 
 	public function getName() {
 		return 'Repair legacy storages';
@@ -55,11 +86,9 @@ class RepairLegacyStorages extends BasicEmitter {
 			$newNumericId = (int)$newNumericId;
 			// try and resolve the conflict
 			// check which one of "local::" or "home::" needs to be kept
-			$sql = 'SELECT DISTINCT `storage` FROM `*PREFIX*filecache`'
-				. ' WHERE `storage` in (?, ?)';
-			$result = \OC_DB::executeAudited($sql, array($oldNumericId, $newNumericId));
-			$row1 = $result->fetchRow();
-			$row2 = $result->fetchRow();
+			$result = $this->findStorageInCacheStatement->execute(array($oldNumericId, $newNumericId));
+			$row1 = $this->findStorageInCacheStatement->fetch();
+			$row2 = $this->findStorageInCacheStatement->fetch();
 			if ($row2 !== false) {
 				// two results means both storages have data, not auto-fixable
 				throw new \OC\RepairException(
@@ -79,9 +108,8 @@ class RepairLegacyStorages extends BasicEmitter {
 				return false;
 			}
 
-			$sql = 'DELETE FROM `*PREFIX*storages`'
-				. ' WHERE `id` = ?';
-			\OC_DB::executeAudited($sql, array(\OC\Files\Cache\Storage::adjustStorageId($toDelete)));
+			// delete storage including file cache
+			\OC\Files\Cache\Storage::remove($toDelete);
 
 			// if we deleted the old id, the new id will be used
 			// automatically
@@ -92,12 +120,9 @@ class RepairLegacyStorages extends BasicEmitter {
 		}
 
 		// rename old id to new id
-		$sql = 'UPDATE `*PREFIX*storages`'
-			. ' SET `id` = ?'
-			. ' WHERE `id` = ?';
 		$newId = \OC\Files\Cache\Storage::adjustStorageId($newId);
 		$oldId = \OC\Files\Cache\Storage::adjustStorageId($oldId);
-		$rowCount = \OC_DB::executeAudited($sql, array($newId, $oldId));
+		$rowCount = $this->renameStorageStatement->execute(array($newId, $oldId));
 		return ($rowCount === 1);
 	}
 
@@ -107,17 +132,17 @@ class RepairLegacyStorages extends BasicEmitter {
 	 */
 	public function run() {
 		// only run once
-		if (\OC_Appconfig::getValue('core', 'repairlegacystoragesdone') === 'yes') {
+		if ($this->config->getAppValue('core', 'repairlegacystoragesdone') === 'yes') {
 			return;
 		}
 
-		$dataDir = \OC_Config::getValue('datadirectory', \OC::$SERVERROOT . '/data/');
+		$dataDir = $this->config->getSystemValue('datadirectory', \OC::$SERVERROOT . '/data/');
 		$dataDir = rtrim($dataDir, '/') . '/';
 		$dataDirId = 'local::' . $dataDir;
 
 		$count = 0;
 
-		\OC_DB::beginTransaction();
+		$this->connection->beginTransaction();
 
 		// note: not doing a direct UPDATE with the REPLACE function
 		// because regexp search/extract is needed and it is not guaranteed
@@ -125,8 +150,8 @@ class RepairLegacyStorages extends BasicEmitter {
 		$sql = 'SELECT `id`, `numeric_id` FROM `*PREFIX*storages`'
 			. ' WHERE `id` LIKE ?'
 			. ' ORDER BY `id`';
-		$result = \OC_DB::executeAudited($sql, array($dataDirId . '%'));
-		while ($row = $result->fetchRow()) {
+		$result = $this->connection->executeQuery($sql, array($dataDirId . '%'));
+		while ($row = $result->fetch()) {
 			$currentId = $row['id'];
 			// one entry is the datadir itself
 			if ($currentId === $dataDirId) {
@@ -141,8 +166,8 @@ class RepairLegacyStorages extends BasicEmitter {
 		// check for md5 ids, not in the format "prefix::"
 		$sql = 'SELECT COUNT(*) `c` FROM `*PREFIX*storages`'
 			. ' WHERE `id` NOT LIKE \'%::%\'';
-		$result = \OC_DB::executeAudited($sql);
-		$row = $result->fetchRow();
+		$result = $this->connection->executeQuery($sql);
+		$row = $result->fetch();
 		// find at least one to make sure it's worth
 		// querying the user list
 		if ((int)$row['c'] > 0) {
@@ -181,8 +206,8 @@ class RepairLegacyStorages extends BasicEmitter {
 
 		$this->emit('\OC\Repair', 'info', array('Updated ' . $count . ' legacy home storage ids'));
 
-		\OC_DB::commit();
+		$this->connection->commit();
 
-		\OC_Appconfig::setValue('core', 'repairlegacystoragesdone', 'yes');
+		$this->config->setAppValue('core', 'repairlegacystoragesdone', 'yes');
 	}
 }

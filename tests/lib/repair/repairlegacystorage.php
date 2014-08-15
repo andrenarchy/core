@@ -23,27 +23,29 @@ class TestRepairLegacyStorages extends PHPUnit_Framework_TestCase {
 	private $newStorageId;
 
 	public function setUp() {
-		$this->oldDataDir = \OC_Config::getValue('datadirectory', \OC::$SERVERROOT . '/data/');
+		$this->config = \OC::$server->getConfig();
+		$this->connection = \OC_DB::getConnection();
+		$this->oldDataDir = $this->config->getSystemValue('datadirectory', \OC::$SERVERROOT . '/data/');
 
-		$this->repair = new \OC\Repair\RepairLegacyStorages();
+		$this->repair = new \OC\Repair\RepairLegacyStorages($this->config, $this->connection);
 	}
 
 	public function tearDown() {
 		\OC_User::deleteUser($this->user);
 
 		$sql = 'DELETE FROM `*PREFIX*storages`';
-		\OC_DB::executeAudited($sql);
+		$this->connection->executeQuery($sql);
 		$sql = 'DELETE FROM `*PREFIX*filecache`';
-		\OC_DB::executeAudited($sql);
-		\OC_Config::setValue('datadirectory', $this->oldDataDir);
-		\OC_Appconfig::setValue('core', 'repairlegacystoragesdone', 'no');
+		$this->connection->executeQuery($sql);
+		\OCP\Config::setSystemValue('datadirectory', $this->oldDataDir);
+		$this->config->setAppValue('core', 'repairlegacystoragesdone', 'no');
 	}
 
 	function prepareSettings($dataDir, $userId) {
 		// hard-coded string as we want a predictable fixed length
 		// no data will be written there
 		$this->dataDir = $dataDir;
-		\OC_Config::setValue('datadirectory', $this->dataDir);
+		\OCP\Config::setSystemValue('datadirectory', $this->dataDir);
 
 		$this->user = $userId;
 		$this->legacyStorageId = 'local::' . $this->dataDir . $this->user . '/';
@@ -61,7 +63,7 @@ class TestRepairLegacyStorages extends PHPUnit_Framework_TestCase {
 			. ' VALUES (?)';
 
 		$storageId = \OC\Files\Cache\Storage::adjustStorageId($storageId);
-		$numRows = \OC_DB::executeAudited($sql, array($storageId));
+		$numRows = $this->connection->executeUpdate($sql, array($storageId));
 		$this->assertEquals(1, $numRows);
 
 		return \OC_DB::insertid('*PREFIX*storages');
@@ -179,6 +181,7 @@ class TestRepairLegacyStorages extends PHPUnit_Framework_TestCase {
 		}
 		catch (\OC\RepairException $e) {
 			$thrown = true;
+			$this->connection->rollback();
 		}
 
 		$this->assertTrue($thrown);
@@ -188,7 +191,7 @@ class TestRepairLegacyStorages extends PHPUnit_Framework_TestCase {
 		$this->assertEquals($newStorageNumId, $this->getStorageId($this->newStorageId));
 
 		// did not set the done flag
-		$this->assertNotEquals('yes', \OC_Appconfig::getValue('core', 'repairlegacystoragesdone'));
+		$this->assertNotEquals('yes', $this->config->getAppValue('core', 'repairlegacystoragesdone'));
 	}
 
 	/**
@@ -266,15 +269,15 @@ class TestRepairLegacyStorages extends PHPUnit_Framework_TestCase {
 		});
 
 		$this->prepareSettings('/tmp/oc-autotest/datadir', uniqid('user_'));
-		$this->assertNotEquals('yes', \OC_Appconfig::getValue('core', 'repairlegacystoragesdone'));
+		$this->assertNotEquals('yes', $this->config->getAppValue('core', 'repairlegacystoragesdone'));
 		$this->repair->run();
 		$this->assertEquals(1, count($output));
-		$this->assertEquals('yes', \OC_Appconfig::getValue('core', 'repairlegacystoragesdone'));
+		$this->assertEquals('yes', $this->config->getAppValue('core', 'repairlegacystoragesdone'));
 
 		$output = array();
 		$this->repair->run();
 		// no output which means it did not run
 		$this->assertEquals(0, count($output));
-		$this->assertEquals('yes', \OC_Appconfig::getValue('core', 'repairlegacystoragesdone'));
+		$this->assertEquals('yes', $this->config->getAppValue('core', 'repairlegacystoragesdone'));
 	}
 }
