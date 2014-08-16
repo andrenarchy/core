@@ -8,7 +8,8 @@
 
 require_once 'archive.php';
 
-if (!OC_Util::runningOnWindows()) {
+// TODO travis
+if (!OC_Util::runningOnWindows() && !getenv('TRAVIS')) {
 class Test_Archive_TAR extends Test_Archive {
 	protected function getExisting() {
 		$dir = OC::$SERVERROOT . '/tests/data';
