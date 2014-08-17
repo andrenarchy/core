@@ -102,6 +102,7 @@ class Router implements IRouter {
 
 	/**
 	 * loads the api routes
+	 * @param null $app
 	 * @return void
 	 */
 	public function loadRoutes($app = null) {
