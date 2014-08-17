@@ -6,6 +6,31 @@
  * See the COPYING-README file.
  */
 
+$this->create('index', '/')
+	->actionInclude('files/index.php');
+$this->create('ajax_delete', 'ajax/delete.php')
+	->actionInclude('files/ajax/delete.php');
+$this->create('ajax_download', 'ajax/download.php')
+	->actionInclude('files/ajax/download.php');
+$this->create('ajax_getstoragestats', 'ajax/getstoragestats.php')
+	->actionInclude('files/ajax/getstoragestats.php');
+$this->create('ajax_list', 'ajax/list.php')
+	->actionInclude('files/ajax/list.php');
+$this->create('ajax_mimeicon', 'ajax/mimeicon.php')
+	->actionInclude('files/ajax/mimeicon.php');
+$this->create('ajax_move', 'ajax/move.php')
+	->actionInclude('files/ajax/move.php');
+$this->create('ajax_newfile', 'ajax/newfile.php')
+	->actionInclude('files/ajax/newfile.php');
+$this->create('ajax_newfolder', 'ajax/newfolder.php')
+	->actionInclude('files/ajax/newfolder.php');
+$this->create('ajax_rename', 'ajax/rename.php')
+	->actionInclude('files/ajax/rename.php');
+$this->create('ajax_scan', 'ajax/scan.php')
+	->actionInclude('files/ajax/scan.php');
+$this->create('ajax_upload', 'ajax/upload.php')
+	->actionInclude('files/ajax/upload.php');
+
 $this->create('download', 'download{file}')
 	->requirements(array('file' => '.*'))
 	->actionInclude('files/download.php');
